@@ -1,0 +1,67 @@
+{
+  "split_before_after": {
+    "logistic regression | random split (before)": {
+      "AUC": 0.715,
+      "AUC_sd": 0.0058,
+      "P@50": 0.884,
+      "P@200": 0.857
+    },
+    "logistic regression | client-grouped (after)": {
+      "AUC": 0.6565,
+      "AUC_sd": 0.0342,
+      "P@50": 0.796,
+      "P@200": 0.783
+    },
+    "random forest | random split (before)": {
+      "AUC": 0.7734,
+      "AUC_sd": 0.0048,
+      "P@50": 0.972,
+      "P@200": 0.937
+    },
+    "random forest | client-grouped (after)": {
+      "AUC": 0.6726,
+      "AUC_sd": 0.0377,
+      "P@50": 0.792,
+      "P@200": 0.757
+    },
+    "(base rate / random picking)": {
+      "AUC": 0.5,
+      "AUC_sd": NaN,
+      "P@50": 0.5421,
+      "P@200": 0.5421
+    }
+  },
+  "leakage_timeline": {
+    "logistic regression | Week-5 features (overlap)": {
+      "AUC": 0.6565,
+      "AUC_sd": 0.0342,
+      "P@50": 0.796,
+      "P@200": 0.783
+    },
+    "logistic regression | strict timeline": {
+      "AUC": 0.6649,
+      "AUC_sd": 0.0653,
+      "P@50": 0.828,
+      "P@200": 0.776
+    },
+    "random forest | Week-5 features (overlap)": {
+      "AUC": 0.6726,
+      "AUC_sd": 0.0377,
+      "P@50": 0.792,
+      "P@200": 0.757
+    },
+    "random forest | strict timeline": {
+      "AUC": 0.6218,
+      "AUC_sd": 0.0615,
+      "P@50": 0.712,
+      "P@200": 0.695
+    },
+    "(base rate / random picking)": {
+      "AUC": 0.5,
+      "AUC_sd": NaN,
+      "P@50": 0.5421,
+      "P@200": 0.5421
+    }
+  },
+  "deliberate_leak_auc": 0.9976
+}
