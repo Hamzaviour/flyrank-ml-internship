@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Which pages should a content team review first? An honest test of a decline-risk ranking</title>
+<meta name="description" content="A client-held-out test of a page-level decline-risk ranking built on FlyRank ML Internship search data: model vs baseline, leakage checks, a ranked action playbook, and the limits of all of it.">
+<style>
+  :root { --bg:#fbfaf7; --ink:#1f2933; --muted:#5b6770; --rule:#dcd8cf; --accent:#2f6f9f; --card:#ffffff; --warn:#fff4e0; --warnrule:#e3b45a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16191d; --ink:#e6e8ea; --muted:#9aa5b1; --rule:#2b3138; --accent:#7db4e0; --card:#1d2227; --warn:#2b2418; --warnrule:#8a6a2c; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:17px/1.65 Georgia, "Iowan Old Style", "Times New Roman", serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1,h2,h3,nav,figcaption,table,.meta,.tag { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { font-size: 1.35rem; margin: 2.6rem 0 0.6rem; padding-top: 1.2rem; border-top: 1px solid var(--rule); }
+  h3 { font-size: 1.05rem; margin: 1.6rem 0 0.3rem; }
+  p { margin: 0.7rem 0; }
+  a { color: var(--accent); }
+  .meta { color: var(--muted); font-size: 0.9rem; }
+  .abstract { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 14px 18px; margin: 22px 0; }
+  .abstract h2 { border: 0; margin: 0 0 4px; padding: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  nav { font-size: 0.9rem; margin: 18px 0 0; }
+  nav ol { padding-left: 1.2rem; columns: 2; column-gap: 28px; margin: 6px 0 0; }
+  figure { margin: 1.4rem 0; }
+  figure .img { background:#fff; border:1px solid var(--rule); border-radius:8px; padding:8px; }
+  figure img { width: 100%; height: auto; display: block; }
+  figcaption { font-size: 0.88rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin: 1rem 0; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 600; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; }
+  .callout { background: var(--warn); border-left: 4px solid var(--warnrule); padding: 10px 14px; border-radius: 4px; margin: 1.2rem 0; font-size: 0.95rem; }
+  code { font: 0.85em ui-monospace, Menlo, Consolas, monospace; background: color-mix(in srgb, var(--rule) 55%, transparent); padding: 1px 5px; border-radius: 4px; }
+  ol.rank > li { margin: 0.6rem 0; }
+  .tag { display:inline-block; font-size: .72rem; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--rule); color: var(--muted); margin-left: 4px; }
+  footer { margin-top: 3rem; font-size: 0.88rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 14px; }
+  @media (max-width: 560px) { body { font-size: 16px; } h1 { font-size: 1.6rem; } nav ol { columns: 1; } }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <p class="meta">Research note · ML Internship capstone · October 2026</p>
+  <h1>Which pages should a content team review first?</h1>
+  <p class="meta" style="font-size:1.05rem;color:var(--ink)">An honest, client-held-out test of a page-level decline-risk ranking</p>
+  <p class="meta">Hamza Younas · <a href="https://github.com/Hamzaviour/flyrank-ml-internship">code and notebooks</a></p>
+
+  <section class="abstract" id="abstract" aria-labelledby="abs-h">
+    <h2 id="abs-h">Abstract</h2>
+    <p><strong>Question.</strong> A content team can review only a few dozen pages per sprint, so which pages should come first? <strong>Data and method.</strong> Using a 30,000-page snapshot of pseudonymised search and analytics data from the FlyRank ML Internship release (and a one-month check of the 79M-row warehouse), I compared a hand-written CTR rule against logistic regression, a shallow tree and a random forest, validated on clients the models had never seen. <strong>Result.</strong> The rule was close to random for predicting decline (AUC 0.55), while client-held-out models reached AUC 0.66–0.67 and precision@50 of about 0.80 against a 0.54 base rate. <strong>Caveat.</strong> A random split would have overstated skill by 0.06–0.10 AUC, and the signal is modest, so I treat the output as a review queue, not a forecast. <strong>Use.</strong> The result is a ranked, human-reviewed playbook with reason codes, monitoring triggers and an explicit list of what must not be automated.</p>
+  </section>
+
+  <nav aria-label="Contents">
+    <strong>Contents</strong>
+    <ol>
+      <li><a href="#intro">Introduction</a></li>
+      <li><a href="#data">Data</a></li>
+      <li><a href="#method">Methodology</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#limits">Limitations</a></li>
+      <li><a href="#recs">Ranked recommendations</a></li>
+      <li><a href="#repro">Reproducibility</a></li>
+      <li><a href="#credit">Acknowledgments &amp; data credit</a></li>
+    </ol>
+  </nav>
+</header>
+
+<h2 id="intro">1. Introduction</h2>
+<p>Picture a content lead on Monday morning with 3,000 published pages and time to look at fifty. Opening pages at random wastes the week; an obvious rule such as "low CTR for its position" feels sensible. This note asks a narrow question: <em>does a learned score pick better pages than that rule, and how much of its apparent skill survives an honest test?</em></p>
+<p>The outcome I score is whether a page is <strong>declining</strong>: its impressions in the last 30 days fell by more than 20% compared with the 30 days before. Everything below is decision-support. It orders human attention; it does not say why a page moved, and it does not show that any action would reverse a decline.</p>
+
+<h2 id="data">2. Data</h2>
+<p><strong>Modelling snapshot.</strong> The main experiments use a 30,000-page slice (one row per page, 44 columns, 32 pseudonymised clients) covering a trailing 90-day window. About 54% of pages are labelled declining.</p>
+<p><strong>Warehouse check.</strong> The same release also ships a daily warehouse of about 79 million rows (build v20260703, January 2025 to June 2026). I did not scan all of it. I verified the data contract on one mid-panel month, March 2026, with three queries:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Check on <code>month=2026-03</code></th><th class="n">Result</th></tr></thead>
+  <tbody>
+    <tr><td>Grain: duplicate (date, client, page) rows</td><td class="n">0 of 9,841,378</td></tr>
+    <tr><td>Span and coverage</td><td class="n">31 days · 55 clients · 331,437 pages</td></tr>
+    <tr><td>Rows passing <code>gsc_data_available IS TRUE</code></td><td class="n">36.7%</td></tr>
+    <tr><td>Rows passing <code>ga4_data_available IS TRUE</code></td><td class="n">4.2%</td></tr>
+  </tbody>
+</table></div>
+<p>Because analytics coverage is that thin, I used search-console signals only. The final month (June 2026) is the natural outcome window of any past-to-future label, so I left it sealed and never queried it.</p>
+<p><strong>Excluded, and why.</strong> Identifiers (used only to group folds); the model and provider that wrote each page (not a user-value signal); and every column derived from the label, namely the trend fields and the 30-day windows.</p>
+
+<h2 id="method">3. Methodology</h2>
+<h3>Label and baseline</h3>
+<p>Label: <code>declining = 1</code> when the 30-day impression change is below −20%. The baseline is a transparent rule: <em>impressions × (typical CTR for the page's position band − the page's CTR)</em>, for pages in positions 1–20 with at least 1,000 impressions. Before building it I checked two signals. CTR falls steadily as position worsens (confirmed). Staleness matches decline only loosely (mixed), so I did not build the rule on it.</p>
+<h3>Models and validation</h3>
+<p>Logistic regression, a depth-3 decision tree and a random forest, with missing values flagged rather than blindly zero-filled. Folds are <strong>grouped by client</strong> (five folds, seed 42), so every client sits wholly in training or wholly in test. All scores are out-of-fold; the baseline's CTR norm is re-fitted on training folds only.</p>
+<h3>Leakage checks</h3>
+<ul>
+  <li><strong>Deliberate leak:</strong> adding the label's own source column pushed AUC to 0.998 on the snapshot and 0.999 on a warehouse month, so the test harness does detect leakage. Honest figures are kept.</li>
+  <li><strong>Split check:</strong> the same models scored under a random split versus the client-held-out split (Figure 2).</li>
+  <li><strong>Timeline check:</strong> 90-day columns contain the label's 30-day windows. I re-ran with a strict-timeline set (static metadata plus the earliest 30 days of volume).</li>
+</ul>
+
+<h2 id="results">4. Results</h2>
+<figure>
+  <div class="img"><img src="img/fig1_model_vs_baseline.png" alt="Bar charts comparing AUC and precision at 50 for random picking, the baseline rule, a decision tree, a random forest and logistic regression."></div>
+  <figcaption><strong>Figure 1.</strong> Same client-held-out folds, same target. The CTR rule barely beats random picking for decline; the learned models clear the 0.54 base rate by a clear margin at the top of the list.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+  <thead><tr><th>Method (client-held-out)</th><th class="n">AUC</th><th class="n">P@20</th><th class="n">P@50</th><th class="n">P@200</th></tr></thead>
+  <tbody>
+    <tr><td>Random picking (base rate)</td><td class="n">0.50</td><td class="n">0.54</td><td class="n">0.54</td><td class="n">0.54</td></tr>
+    <tr><td>Week-4 CTR rule (baseline)</td><td class="n">0.55</td><td class="n">0.53</td><td class="n">0.56</td><td class="n">0.59</td></tr>
+    <tr><td>Decision tree, depth 3</td><td class="n">0.61</td><td class="n">0.61</td><td class="n">0.62</td><td class="n">0.62</td></tr>
+    <tr><td>Random forest</td><td class="n">0.67</td><td class="n">0.77</td><td class="n">0.77</td><td class="n">0.76</td></tr>
+    <tr><td>Logistic regression</td><td class="n">0.66</td><td class="n">0.76</td><td class="n">0.80</td><td class="n">0.78</td></tr>
+  </tbody>
+</table></div>
+<p>The forest and logistic regression perform alike, so I prefer logistic regression for its simplicity. The strongest inputs were average position and page age, possibly partly a measurement-coverage effect (the depth-3 tree routes pages with no position data to "not declining"), so I read them as directional, not causal.</p>
+
+<figure>
+  <div class="img"><img src="img/fig2_split_before_after.png" alt="Bar chart of AUC under a random split versus a client-held-out split for logistic regression and random forest."></div>
+  <figcaption><strong>Figure 2.</strong> The same models under a random split score 0.72 and 0.77 AUC; held-out clients give 0.66 and 0.67. The gap measures how much a random split would have rewarded memorising a client.</figcaption>
+</figure>
+<p>Under the strict-timeline feature set, logistic regression stayed about the same (AUC 0.665) and the forest dropped to 0.62. Fold-to-fold spread is 0.03–0.07 AUC, so differences smaller than about 0.03 should not be read as real.</p>
+<p>A separate warehouse experiment (one month, 90,593 pages, will daily impressions grow by more than 20% in the second half of March?) gave an honest AUC of 0.617 against 0.999 with a deliberate leak. It is a leakage demonstration on a different target, not a second validation of the main model.</p>
+
+<h3>A negative result that shaped the playbook</h3>
+<figure>
+  <div class="img"><img src="img/fig3_ordering_negative_result.png" alt="Bar chart of the share of queued pages that were declining, for three actions under two orderings."></div>
+  <figcaption><strong>Figure 3.</strong> Ordering the refresh and protect queues by page size picked pages that were <em>less</em> likely to decline than chance (25% and 10%). Ordering by model probability gave 85% and 40%. I chose that ordering after seeing this comparison, so the 85% is optimistic.</figcaption>
+</figure>
+
+<figure>
+  <div class="img"><img src="img/fig4_decay_by_staleness_and_age.png" alt="Bar charts of the share of pages declining by days since last update and by content age."></div>
+  <figcaption><strong>Figure 4.</strong> Pages untouched for 91–180 days declined more often (61%, n = 9,171) than pages updated in the last 30 days (51%, n = 20,480). Younger pages declined more than older ones, the opposite of what many assume. Observational only; the thin buckets (n &lt; 200) carry no weight.</figcaption>
+</figure>
+
+<h2 id="limits">5. Limitations &amp; honest framing</h2>
+<ul>
+  <li><strong>One snapshot, no time test.</strong> A single 90-day window, active pages only (at least one impression, age at least 90 days), 32 clients. I did not run a time-ordered split, so I cannot claim the ranking holds next month.</li>
+  <li><strong>Modest signal.</strong> AUC of about 0.66 is directional. Precision@K moves several points between folds because fold base rates range from 0.38 to 0.65.</li>
+  <li><strong>Window overlap.</strong> Rule inputs such as position and CTR are 90-day figures that contain the label's window.</li>
+  <li><strong>Mean reversion.</strong> Tiny-volume pages swing in percentage terms, so some "declines" are noise.</li>
+  <li><strong>Clicks at stake is an estimate</strong> built from stated assumptions (a decline is at least 20%), not a forecast of revenue. The 15-minutes-per-page review cost is an assumption.</li>
+  <li><strong>Observational.</strong> Nothing here shows that refreshing a page <em>causes</em> recovery.</li>
+  <li>Analytics coverage in the warehouse month is thin (4.2% of rows), so engagement signals are not in the model.</li>
+</ul>
+
+<h2 id="recs">6. Ranked recommendations</h2>
+<p>These come from the action playbook: each page gets one action and one reason code, and a sprint queue of 50 pages is split 20 / 20 / 10 across the three actions.</p>
+<ol class="rank">
+  <li><strong>Refresh</strong> <code>refresh_content</code> <span class="tag">stale_and_likely_declining</span> — pages with model probability of decline at or above 0.60 and 90+ days since the last update. Rank by probability. Review the page and its queries before spending time.</li>
+  <li><strong>Rewrite title and meta</strong> <code>rewrite_title_meta</code> <span class="tag">ctr_below_position_norm</span> — pages in positions 1–20 with a CTR below the norm for their position band. Rank by estimated missed clicks. Check for search-result features before editing.</li>
+  <li><strong>Protect page one</strong> <code>protect_page_one</code> <span class="tag">page_one_at_risk</span> — human review only. The slot is small and was below the base rate in the check.</li>
+  <li><strong>Monitor / no action</strong> — young pages (wait a cycle) and pages with fewer than 200 impressions.</li>
+</ol>
+<div class="callout"><strong>Do not automate:</strong> publishing, deleting, redirecting or de-indexing from a score; bulk rewriting titles or content without a person reading each result; reporting "clicks at stake" as revenue; applying the queue to a new client or month without re-checking; ranking clients or writers with it.</div>
+<p><strong>Light monitoring.</strong> Re-check monthly: precision@50 minus base rate (alert below +0.10 twice in a row), the share of pages with no position data (±5 points), the overall decline rate (±10 points), the share of reviewer rejections (above 50%), and any share of unseen clients above 20%. Retrain monthly or after any change to how trend or position is computed.</p>
+
+<h2 id="repro">7. Reproducibility</h2>
+<p>Everything is in the repository: <a href="https://github.com/Hamzaviour/flyrank-ml-internship">github.com/Hamzaviour/flyrank-ml-internship</a>. Seeds are fixed at 42; each number on this page traces to a committed metrics file in <code>work/outputs/</code>.</p>
+<ul>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/w03_data_contract.ipynb">Data contract, warehouse checks and leakage demo</a></li>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/w04_baseline_score.ipynb">Signal checks and baseline rule</a></li>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/w05_model.ipynb">Model vs baseline</a></li>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/w06_validation_audit.ipynb">Validation and claim audit</a></li>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/w07_action_playbook.ipynb">Action playbook</a></li>
+  <li><a href="https://github.com/Hamzaviour/flyrank-ml-internship/blob/main/work/notebooks/capstone.ipynb">Capstone notebook (regenerates every chart here)</a></li>
+</ul>
+<p>The warehouse is gated on Hugging Face (request access, then use a read token as a notebook secret). The queue CSV is regenerated by the notebooks and is deliberately not committed.</p>
+
+<h2 id="credit">8. Acknowledgments &amp; data credit</h2>
+<p><strong>Built on the FlyRank ML Internship dataset</strong> — <a href="https://flyrank.ai">flyrank.ai</a>. Thanks to the FlyRank team for the pseudonymised release and the internship curriculum. All client and page identifiers in the source data are pseudonymised, and none appear here.</p>
+<p>This is a student research project. It is observational, uses a limited snapshot, and is not an official FlyRank publication or a product recommendation.</p>
+
+<footer>Observed and measured on the data described above; directional, not causal. Decision-support only.</footer>
+</main>
+</body>
+</html>
